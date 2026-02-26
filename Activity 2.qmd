@@ -19,6 +19,46 @@ library(dplyr)
 insurance <- read.csv("insurance_data_S26")
 
 ```
+
+## Introduction/Background
+In the intitial exploration
+age, children,
+
+
+initialModel <-
+
+
+
+
+
+
+
+
+
+
+## Data Exploration
+In our intitial exploration, we decided to take a quick look at the variables and guessed at which variables have the most effect, similar to what we did in a previous activity. We initially think that age, smoker, children, and prior claims could have the most accuracy on the model.
+
+
+
+Initial model:
+initial_model <- lm(
+  charges ~ priorclaims + + smoker + age + children,
+  data = insurance
+)
+summary(initial_model)
+
+
+
+## Modeling Methods/Strategies
+## Results
+  # A. Initial Results
+  #B. Interpretations
+  #C. Model Evaluation
+  D. Refinements
+Final Recommendations
+Author Contributions/Responsibilities
+Code Appendix
 ---
 
 ## Quarto
