@@ -16,7 +16,7 @@ library(ggplot2)
 library(dplyr)
 
 #Read in Dataset
-insurance <- read.csv("insurance_data_26")
+insurance <- read.csv("insurance_data_S26")
 
 ```
 ---
