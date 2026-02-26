@@ -1,0 +1,43 @@
+---
+title: "Activity 2"
+format: pdf
+editor: visual
+author: 
+---
+
+```{r}
+#| label: setup
+#| warning: FALSE
+
+#Add libraries as needed
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+
+#Read in Dataset
+insurance <- read.csv("insurance_data_S26.csv")
+
+```
+
+priorclaims, sex, age, smoker, BMI
+
+------------------------------------------------------------------------
+
+```{r}
+##| label: bmi plot
+#| echo: False
+
+plot(insurance$charges, insurance$bmi,
+     col  = adjustcolor("steelblue", alpha.f = 0.5),
+     pch  = 19,
+     xlab = "Charges",
+     ylab = "BMI",
+     main = "BMI vs Charges")
+
+```
+
+![](images/clipboard-3093701800.png)
+
+```{}
+```
