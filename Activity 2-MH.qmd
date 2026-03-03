@@ -22,6 +22,8 @@ insurance <- read.csv("insurance_data_S26.csv")
 
 priorclaims, sex, age, smoker, BMI
 
+Backward BIC
+
 ------------------------------------------------------------------------
 
 ```{r}
@@ -39,5 +41,69 @@ plot(insurance$charges, insurance$bmi,
 
 ![](images/clipboard-3093701800.png)
 
-```{}
+If there is any correlation its very weal
+
+```{r}
+avg_charges <- tapply(insurance$charges, insurance$priorclaims, mean)
+
+barplot(avg_charges,
+        xlab = "Prior Claims",
+        ylab = "Average Charges",
+        main = "Average Charges by Prior Claims",
+        col  = "lightblue")
+```
+
+Problem with this is that the \# of people with high prior claims is very low compared to people with 0-4 so we can't be certain that prior claims is a predictor
+
+```{r}
+boxplot(charges ~ sex,
+        data = insurance,
+        xlab = "Sex",
+        ylab = "Charges",
+        main = "Charges by Sex",
+        col  = c("lightpink", "lightblue"))
+```
+
+Medians are identical so basically no relationship between sex and charges
+
+```{r}
+boxplot(charges ~ smoker,
+        data = insurance,
+        xlab = "Smoker",
+        ylab = "Charges",
+        main = "Charges by Smoker Status",
+        col  = c("lightblue", "red"))
+```
+
+Looks like smokers do have a real difference in charges than non smokers and could serve as a good predictor
+
+```{r}
+set.seed(735)
+train_index <- sample(
+  x = 1:nrow(insurance),
+  size = floor(0.80 * nrow(insurance))
+)
+
+insuranceTrain <- insurance[train_index, ]
+insuranceValidation <- insurance[-train_index, ]
+
+```
+
+```{r}
+full_model <- lm(charges ~., data = insuranceTrain)
+backward_AIC <- stats::step(
+  full_model,
+  direction = "backward",
+  k = 2,
+  trace = 0
+)
+
+summary(backward_AIC)
+```
+
+```{r}
+predictions <- predict(backward_AIC, newdata = insuranceValidation)
+
+RMSE <- sqrt(mean((insuranceValidation$charges - predictions)^2))
+RMSE
 ```
