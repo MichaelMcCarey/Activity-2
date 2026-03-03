@@ -2,7 +2,7 @@
 title: "Activity 2"
 format: pdf
 editor: visual
-author: 
+authors: Michael McCarey, Matt Hunter
 ---
 
 ```{r}
@@ -67,6 +67,14 @@ forward_BIC <- stats::step(object = Null_Model,
             direction = "forward",
             k = log(nrow(insurance)),
             trace = 0)
+#smoker, age, bmi, children
+#intercept: -11627.9
+#smoker: 23016.6, age: 257.6, bmi: 310.6, children: 503.0
+RMSE_Forward_BIC <- modelr::rmse(
+    model = forward_BIC,
+    data = insuranceValidation
+  )
+#RMSE 6537.112
 ```
 ![](images/clipboard-3093701800.png)
 
