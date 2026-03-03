@@ -52,15 +52,20 @@ insuranceValidation <- insurance[-insurance_index, ]
 ```
 
 ```{r}    
-#| label: Backward AIC
+#| label: Forward BIC
 #| 
-Full_Modell <- lm(
+Full_Model <- lm(
   charges ~ .,
   data = insurance)
-backward_AIC <- stats::step(object = Full_Model,
+
+Null_Model <- lm(
+  charges ~ 1,
+  data = insurance)
+forward_BIC <- stats::step(object = Null_Model,
+            scope = list(lower = Null_Model, upper = Full_Model),
             data = insurance,
-            direction = "backward",
-            k = 2,
+            direction = "forward",
+            k = log(nrow(insurance)),
             trace = 0)
 ```
 ![](images/clipboard-3093701800.png)
