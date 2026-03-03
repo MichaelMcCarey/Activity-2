@@ -1,0 +1,69 @@
+---
+title: "Activity 2"
+format: pdf
+editor: visual
+author: 
+---
+
+```{r}
+#| label: setup
+#| warning: FALSE
+
+#Add libraries as needed
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+
+#Read in Dataset
+insurance <- read.csv("insurance_data_S26.csv")
+```
+
+priorclaims, sex, age, smoker, BMI
+
+------------------------------------------------------------------------
+
+```{r}
+#| label: bmi plot
+#| echo: False
+
+plot(insurance$charges, insurance$bmi,
+     col  = adjustcolor("steelblue", alpha.f = 0.5),
+     pch  = 19,
+     xlab = "Charges",
+     ylab = "BMI",
+     main = "BMI vs Charges")
+
+
+
+
+
+
+```
+```{r}
+#| label: validation set approach
+
+set.seed(735)
+insurance_index <- sample(
+  x = 1:nrow(insurance), 
+  size = floor(0.85*nrow(insurance)))
+insuranceTrain <- insurance[insurance_index, ]
+insuranceValidation <- insurance[-insurance_index, ]
+```
+
+```{r}    
+#| label: Backward AIC
+#| 
+Full_Modell <- lm(
+  charges ~ .,
+  data = insurance)
+backward_AIC <- stats::step(object = Full_Model,
+            data = insurance,
+            direction = "backward",
+            k = 2,
+            trace = 0)
+```
+![](images/clipboard-3093701800.png)
+
+```         
+```
