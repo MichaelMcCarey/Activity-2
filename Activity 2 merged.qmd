@@ -1,0 +1,136 @@
+---
+title: "Activity 2"
+format: pdf
+editor: visual
+author: 
+---
+
+```{r}
+#| label: setup
+#| warning: FALSE
+
+#Add libraries as needed
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+
+#Read in Dataset
+insurance <- read.csv("insurance_data_S26.csv")
+
+```
+
+priorclaims, sex, age, smoker, BMI
+
+Backward BIC
+
+------------------------------------------------------------------------
+
+```{r}
+##| label: bmi plot
+#| echo: False
+
+plot(insurance$charges, insurance$bmi,
+     col  = adjustcolor("steelblue", alpha.f = 0.5),
+     pch  = 19,
+     xlab = "Charges",
+     ylab = "BMI",
+     main = "BMI vs Charges")
+
+```
+
+![](images/clipboard-3093701800.png)
+
+If there is any correlation its very weal
+
+```{r}
+avg_charges <- tapply(insurance$charges, insurance$priorclaims, mean)
+
+barplot(avg_charges,
+        xlab = "Prior Claims",
+        ylab = "Average Charges",
+        main = "Average Charges by Prior Claims",
+        col  = "lightblue")
+```
+
+Problem with this is that the \# of people with high prior claims is very low compared to people with 0-4 so we can't be certain that prior claims is a predictor
+
+```{r}
+boxplot(charges ~ sex,
+        data = insurance,
+        xlab = "Sex",
+        ylab = "Charges",
+        main = "Charges by Sex",
+        col  = c("lightpink", "lightblue"))
+```
+
+Medians are identical so basically no relationship between sex and charges
+
+```{r}
+boxplot(charges ~ smoker,
+        data = insurance,
+        xlab = "Smoker",
+        ylab = "Charges",
+        main = "Charges by Smoker Status",
+        col  = c("lightblue", "red"))
+```
+
+Looks like smokers do have a real difference in charges than non smokers and could serve as a good predictor
+
+```{r}
+set.seed(735)
+train_index <- sample(
+  x = 1:nrow(insurance),
+  size = floor(0.80 * nrow(insurance))
+)
+
+insuranceTrain <- insurance[train_index, ]
+insuranceValidation <- insurance[-train_index, ]
+
+```
+
+```{r}
+full_model <- lm(charges ~., data = insuranceTrain)
+backward_AIC <- stats::step(
+  full_model,
+  direction = "backward",
+  k = 2,
+  trace = 0
+)
+
+summary(backward_AIC)
+```
+
+```{r}
+predictions_1 <- predict(backward_AIC, newdata = insuranceValidation)
+
+RMSE_backward_AIC <- sqrt(mean((insuranceValidation$charges - predictions_1)^2))
+RMSE_backward_AIC
+```
+
+```{r}
+Null_Model <- lm(
+  charges ~ 1,
+  data = insuranceTrain)
+forward_BIC <- stats::step(object = Null_Model,
+            scope = list(lower = Null_Model, upper = full_model),
+            direction = "forward",
+            k = log(nrow(insurance)),
+            trace = 0)
+summary(forward_BIC)
+```
+
+```{r}
+predictions_2 <- predict(forward_BIC, newdata = insuranceValidation)
+
+RMSE_Forward_BIC <- sqrt(mean((insuranceValidation$charges - predictions_2)^2))
+RMSE_Forward_BIC
+```
+
+```{r}
+RMSE_insurance_table <- data.frame(
+  Model = c("Forward BIC", "Backward AIC"),
+  RMSE = c(RMSE_Forward_BIC, RMSE_backward_AIC)
+)
+RMSE_insurance_table
+```
