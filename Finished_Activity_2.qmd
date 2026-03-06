@@ -117,7 +117,7 @@ insuranceValidation <- insurance_clean[-train_index, ]
 
 ## Candidate Model 1: Forward BIC Selection
 
-The first candidate model was built using forward selection with BIC as the selection criterion. BIC applies a heavier penalty per parameter than AIC, which tends to produce more parsimonious models which favor variables that offer predictive value over small improvements.
+The first candidate model was built using forward selection with BIC as the selection criterion. BIC applies a heavier penalty per parameter than AIC, which tends to produce more parsimonious models which favor variables that offer predictive value over small improvements. This model was chosen because we preferred the simpler model BIC gives due to penalizing unnecessary complexity more than AIC while still retaining important predictors.
 
 ```{r}
 #| label: forward-bic
@@ -155,14 +155,15 @@ kable(bic_coefs,
 #| echo: false
 
 predictions_BIC    <- predict(forward_BIC, newdata = insuranceValidation)
-RMSE_Forward_BIC   <- sqrt(mean((insuranceValidation$charges - predictions_BIC)^2))
+RMSE_Forward_BIC <- 
+  sqrt(mean((insuranceValidation$charges - predictions_BIC)^2))
 ```
 
 The Forward BIC model selected the following predictors: age, BMI, children, smoker status, and prior claims. Notably, sex and region were excluded this is consistent with the exploratory analysis suggesting sex has little relationship with charges, and with BIC's tendency to prefer simpler models over small regional effects.
 
 ## Candidate Model 2: LASSO Regularization
 
-The second candidate model was built using CV with LASSO. This approach reduces overfitting by actively dampening the influence of all predictors, not just eliminating some. The tuning parameter lambda, which controls the strength of the penalty, was selected using a value of k=10 by identifying the lambda that minimized average error.
+The second candidate model was built using CV with LASSO. This approach reduces overfitting by actively dampening the influence of all predictors, not just eliminating some. The tuning parameter lambda, which controls the strength of the penalty, was selected using a value of k=10 by identifying the lambda that minimized average error. Initially, we chose a backward AIC model for our 2nd model. We decided to go with Lasso instead due to getting essentially the same RMSE and to add variety to our candidate models since it uses regularization rather than another elimination subset selection approach.
 
 ```{r}
 #| label: lasso-cv
@@ -211,7 +212,8 @@ lasso_df    <- data.frame(
   Variable    = rownames(lasso_coefs),
   Coefficient = round(lasso_coefs[, 1], 3)
 )
-lasso_df$Status <- ifelse(lasso_df$Coefficient == 0, "Zeroed Out (Removed)", "Retained")
+lasso_df$Status <- 
+  ifelse(lasso_df$Coefficient == 0, "Zeroed Out (Removed)", "Retained")
 
 kable(lasso_df,
       caption  = "LASSO Model Coefficients",
@@ -223,9 +225,10 @@ kable(lasso_df,
 #| label: lasso-rmse
 #| echo: false
 
-x_validation      <- model.matrix(charges ~ ., data = insuranceValidation)[, -1]
-lasso_predictions <- predict(lasso_final, newx = x_validation, s = best_lambda)
-RMSE_lasso        <- sqrt(mean((insuranceValidation$charges - lasso_predictions)^2))
+x_validation <- model.matrix(charges ~ ., data = insuranceValidation)[, -1]
+lasso_predictions <- 
+  predict(lasso_final, newx = x_validation, s = best_lambda)
+RMSE_lasso  <- sqrt(mean((insuranceValidation$charges - lasso_predictions)^2))
 ```
 
 LASSO eliminated caseID, sex, and the northwest region. This aligns with the data exploration finding that sex showed no meaningful relationship with charges. The northwest region being removed suggests charges in the northwest are not significantly different from the northeast reference group, while southeast and southwest show meaningful differences.
@@ -242,7 +245,8 @@ Both models were evaluated using RMSE which measures the average prediction erro
 
 RMSE_table <- data.frame(
   Model = c("Forward BIC", "LASSO"),
-  `Validation RMSE (USD)` = c(round(RMSE_Forward_BIC, 2), round(RMSE_lasso, 2))
+  `Validation RMSE (USD)` = c(round(RMSE_Forward_BIC, 2), 
+                              round(RMSE_lasso, 2))
 )
 
 kable(RMSE_table,
@@ -287,6 +291,27 @@ The model identifies smoking status as the dominant cost driver where smokers ar
 Sex was eliminated by LASSO and showed no meaningful predictive signal in the exploratory analysis so the company should not factor sex into its pricing model based on this data. The month of claim and prior claims contribute statistically but their practical magnitude is small relative to smoking status.
 
 The model's validation RMSE of means predictions will, on average, be off by that amount which seems to be a reasonable margin for this dataset. For high-charge smokers specifically, the model may be less precise, which could be worth monitoring.
+
+# Final Check
+
+To build more evidence of the predictive power of our model, we will perform one last check on a validation set kept separate from the data we were given.
+
+```{r}
+#| label: final check
+#| echo: false
+
+
+insurance_final_check <-read.csv("insurance_data_validation_S26.csv")
+final_x_validation  <- 
+  model.matrix(charges ~ ., data = insurance_final_check)[, -1]
+final_predictions <- 
+  predict(lasso_final, newx = final_x_validation, s = best_lambda)
+RMSE_final  <- 
+  sqrt(mean((insurance_final_check$charges - final_predictions)^2))
+
+```
+
+The RMSE is \$5913.039. This means that on average, the model's predicted insurance charges will differ by \$5913.039 from the actual insurance charge. This performance appears to be good because it is a better RMSE than either of the 2 candidate models produced on the original dataset.
 
 # Author Contributions
 
