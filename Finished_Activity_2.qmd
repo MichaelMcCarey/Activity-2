@@ -1,0 +1,301 @@
+---
+title: "Activity 2: Predicting Health Insurance Charges"
+format: pdf
+editor: visual
+author: "Matthew Hunter, Michael McCarey"
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(glmnet)
+
+insurance <- read.csv("insurance_data_S26.csv")
+insurance_clean <- na.omit(insurance)
+```
+
+# Introduction
+
+Nittany Valley Insurance Company seeks a predictive model for health insurance charges based on policyholder characteristics. Using a dataset of 861 observations two candidate models were developed: Validation set Forward BIC model and a CV LASSO model.
+
+# Data Exploration
+
+The dataset contains information on nine variables: age (years), sex, BMI, children, smoking status, geographic region, month of claim, number of prior claims, and charges. The response variable is charges.
+
+## Relationship Between Key Predictors and Charges
+
+```{r}
+#| label: bmi-plot
+#| echo: false
+#| warning: false
+#| fig-height: 3.5
+
+plot(insurance$charges, insurance$bmi,
+     col  = adjustcolor("steelblue", alpha.f = 0.5),
+     pch  = 19,
+     xlab = "Charges (USD)",
+     ylab = "BMI (kg/m²)",
+     main = "BMI vs. Insurance Charges")
+```
+
+BMI shows a weak positive relationship with charges. While there is some upward trend, the scatter is wide, which suggests BMI alone is not a strong standalone predictor, but may contribute alongside other variables.
+
+```{r}
+#| label: prior-claims-plot
+#| echo: false
+#| warning: false
+#| fig-height: 3.5
+
+avg_charges <- tapply(insurance$charges, insurance$priorclaims, mean)
+
+barplot(avg_charges,
+        xlab = "Prior Claims",
+        ylab = "Average Charges (USD)",
+        main = "Average Charges by Number of Prior Claims",
+        col  = "lightblue")
+```
+
+Average charges appear to increase with the number of prior claims. However, the number of people with high prior claim counts is very small, so these averages are based on limited observations and should be reassessed.
+
+```{r}
+#| label: sex-plot
+#| echo: false
+#| warning: false
+#| fig-height: 3.5
+
+boxplot(charges ~ sex,
+        data = insurance,
+        xlab = "Sex",
+        ylab = "Charges (USD)",
+        main = "Charges by Sex",
+        col  = c("lightpink", "lightblue"))
+```
+
+The median charges for male and female are nearly identical, and the distributions overlap substantially. This suggests that sex may not be a meaningful predictor of charges.
+
+```{r}
+#| label: smoker-plot
+#| echo: false
+#| warning: false
+#| fig-height: 3.5
+
+boxplot(charges ~ smoker,
+        data = insurance,
+        xlab = "Smoker Status",
+        ylab = "Charges (USD)",
+        main = "Charges by Smoker Status",
+        col  = c("lightblue", "red"))
+```
+
+Smoking status shows a pronounced difference in charges. Smokers have substantially higher median charges with a much wider spread than non-smokers, making this one of the clearest predictors in the dataset.
+
+Based on the exploratory analysis, smoking status, age, BMI, and prior claims appear to be the most promising predictors. Sex appears unlikely to contribute meaningfully.
+
+# Candidate Models
+
+The dataset was split into a training set (80%) and a validation set (20%) using a fixed random seed to ensure reproducibility. The training set was used exclusively to fit each candidate model. The validation set was held out and used only to evaluate final prediction performance.
+
+```{r}
+#| label: train-test-split
+#| echo: false
+
+set.seed(735)
+train_index <- sample(
+  x    = 1:nrow(insurance_clean),
+  size = floor(0.80 * nrow(insurance_clean))
+)
+insuranceTrain      <- insurance_clean[train_index, ]
+insuranceValidation <- insurance_clean[-train_index, ]
+```
+
+## Candidate Model 1: Forward BIC Selection
+
+The first candidate model was built using forward selection with BIC as the selection criterion. BIC applies a heavier penalty per parameter than AIC, which tends to produce more parsimonious models which favor variables that offer predictive value over small improvements.
+
+```{r}
+#| label: forward-bic
+#| echo: false
+#| results: hide
+
+full_model <- lm(charges ~ ., data = insuranceTrain)
+
+Null_Model <- lm(charges ~ 1, data = insuranceTrain)
+
+forward_BIC <- stats::step(
+  object    = Null_Model,
+  scope     = list(lower = Null_Model, upper = full_model),
+  direction = "forward",
+  k         = log(nrow(insuranceTrain)),
+  trace     = 0
+)
+```
+
+```{r}
+#| label: forward-bic-table
+#| echo: false
+
+bic_coefs <- as.data.frame(summary(forward_BIC)$coefficients)
+bic_coefs <- round(bic_coefs, 3)
+colnames(bic_coefs) <- c("Estimate", "Std. Error", "t value", "p-value")
+
+kable(bic_coefs,
+      caption = "Forward BIC Model Coefficients",
+      align   = "r")
+```
+
+```{r}
+#| label: forward-bic-rmse
+#| echo: false
+
+predictions_BIC    <- predict(forward_BIC, newdata = insuranceValidation)
+RMSE_Forward_BIC   <- sqrt(mean((insuranceValidation$charges - predictions_BIC)^2))
+```
+
+The Forward BIC model selected the following predictors: age, BMI, children, smoker status, and prior claims. Notably, sex and region were excluded this is consistent with the exploratory analysis suggesting sex has little relationship with charges, and with BIC's tendency to prefer simpler models over small regional effects.
+
+## Candidate Model 2: LASSO Regularization
+
+The second candidate model was built using CV with LASSO. This approach reduces overfitting by actively dampening the influence of all predictors, not just eliminating some. The tuning parameter lambda, which controls the strength of the penalty, was selected using a value of k=10 by identifying the lambda that minimized average error.
+
+```{r}
+#| label: lasso-cv
+#| echo: false
+#| results: hide
+
+x_train <- model.matrix(charges ~ ., data = insuranceTrain)[, -1]
+y_train <- insuranceTrain$charges
+
+set.seed(500)
+lasso_cv <- cv.glmnet(
+  x      = x_train,
+  y      = y_train,
+  alpha  = 1,
+  nfolds = 10
+)
+
+best_lambda <- lasso_cv$lambda.min
+
+lasso_final <- glmnet(
+  x           = x_train,
+  y           = y_train,
+  alpha       = 1,
+  lambda      = best_lambda,
+  standardize = TRUE
+)
+```
+
+```{r}
+#| label: lasso-cv-plot
+#| echo: false
+#| fig-height: 3.5
+
+plot(lasso_cv,
+     main = "LASSO Cross-Validation: MSE vs. Lambda")
+```
+
+The plot above shows the 10 fold CV error across the range of lambda values tested. The left dashed line marks the optimal lambda with minimum CV error, where the model retained 3 non-zero predictors.
+
+```{r}
+#| label: lasso-coef-table
+#| echo: false
+
+lasso_coefs <- as.matrix(coef(lasso_final))
+lasso_df    <- data.frame(
+  Variable    = rownames(lasso_coefs),
+  Coefficient = round(lasso_coefs[, 1], 3)
+)
+lasso_df$Status <- ifelse(lasso_df$Coefficient == 0, "Zeroed Out (Removed)", "Retained")
+
+kable(lasso_df,
+      caption  = "LASSO Model Coefficients",
+      row.names = FALSE,
+      align    = "lrr")
+```
+
+```{r}
+#| label: lasso-rmse
+#| echo: false
+
+x_validation      <- model.matrix(charges ~ ., data = insuranceValidation)[, -1]
+lasso_predictions <- predict(lasso_final, newx = x_validation, s = best_lambda)
+RMSE_lasso        <- sqrt(mean((insuranceValidation$charges - lasso_predictions)^2))
+```
+
+LASSO eliminated caseID, sex, and the northwest region. This aligns with the data exploration finding that sex showed no meaningful relationship with charges. The northwest region being removed suggests charges in the northwest are not significantly different from the northeast reference group, while southeast and southwest show meaningful differences.
+
+# Results
+
+## Model Evaluation
+
+Both models were evaluated using RMSE which measures the average prediction error in the original units (\$), making it directly interpretable.
+
+```{r}
+#| label: rmse-table
+#| echo: false
+
+RMSE_table <- data.frame(
+  Model = c("Forward BIC", "LASSO"),
+  `Validation RMSE (USD)` = c(round(RMSE_Forward_BIC, 2), round(RMSE_lasso, 2))
+)
+
+kable(RMSE_table,
+      caption   = "Validation RMSE by Candidate Model",
+      col.names = c("Model", "Validation RMSE (USD)"),
+      align     = "lr")
+```
+
+LASSO produced a lower validation RMSE, indicating better predictive accuracy. The difference suggests that LASSO's continuous coefficient shrinkage handled the borderline predictors more effectively than the keep/drop decisions of forward BIC selection.
+
+## Coefficient Interpretations
+
+Interpreting the LASSO model coefficients (holding all other predictors constant):
+
+-   **Age**: Each additional year of age is associated with approximately \$252 more in charges. Older people consistently drive higher costs.
+-   **BMI**: Each one-unit increase in BMI is associated with approximately \$314 more in charges. Higher BMI correlates with increased medical costs.
+-   **Smoker**: Smokers are predicted to incur approximately \$22,768 more in charges than non-smokers. This is the single largest driver of charges in the model by a substantial margin.
+-   **Children**: Having a child/children is associated with approximately \$439 more in charges.
+-   **Region (Southeast)**: People in the southeast are predicted to pay approximately \$1,187 less than those in the northeast.
+-   **Region (Southwest)**: People in the southwest are predicted to pay approximately \$784 less than those in the northeast.
+-   **Prior Claims**: Each additional prior claim is associated with approximately \$254 more in charges.
+-   **Month**: Each later month in the year is associated with approximately \$66 less in charges. This is a small effect and may reflect seasonal patterns in claim timing rather than a causal relationship.
+
+The intercept of approximately -\$10,847 represents the predicted charges when all predictors are zero simultaneously which makes it uninterpretable .
+
+Interpreting the Forward BIC model coefficients (holding all other predictors constant):
+
+-   **Smoker**: Smokers are predicted to incur approximately \$22,950 more in charges than non-smokers. This is the single largest driver of charges in the model by a substantial margin.
+
+-   **Age**: Each additional year of age is associated with approximately \$271 more in charges. Older people consistently drive higher costs.
+
+-   **BMI**: Each one-unit increase in BMI is associated with approximately \$322 more in charges. Higher BMI correlates with increased medical costs.
+
+-   **Children**: Having children is associated with approximately \$680 more in charges compared to those without children.
+
+**Final Recommendation**
+
+Based on the analysis, the **LASSO model** is recommended as the final predictive model for Nittany Valley Insurance Company. It outperformed the Forward BIC model on validation RMSE and produced a principled, interpretable set of predictors that align closely with domain intuition.
+
+The model identifies smoking status as the dominant cost driver where smokers are predicted to cost the company over \$22,000 more than comparable non-smokers. Age and BMI also contribute meaningfully, as does the number of prior claims. Geographic region plays a minor role, with southeastern and southwestern habitants incurring modestly lower charges than those in the northeast, while the northwest shows no significant regional difference.
+
+Sex was eliminated by LASSO and showed no meaningful predictive signal in the exploratory analysis so the company should not factor sex into its pricing model based on this data. The month of claim and prior claims contribute statistically but their practical magnitude is small relative to smoking status.
+
+The model's validation RMSE of means predictions will, on average, be off by that amount which seems to be a reasonable margin for this dataset. For high-charge smokers specifically, the model may be less precise, which could be worth monitoring.
+
+# Author Contributions
+
+-   **Matthew Hunter**: CV LASSO modeling, data exploration, coefficient interpretations, final recommendation
+-   **Michael McCarey**: Forward BIC modeling, introduction, coefficient interpretations
+
+------------------------------------------------------------------------
+
+# Code Appendix
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+```
